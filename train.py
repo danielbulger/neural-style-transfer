@@ -1,9 +1,7 @@
 import torch
-from PIL import Image
 from torch import optim
 
-from torch.autograd import Variable
-from torchvision.transforms import ToTensor
+from model import loader
 from model.ConvNet import ConvNet
 from argparse import ArgumentParser
 
@@ -26,23 +24,15 @@ def main():
 	if args.cuda and not torch.cuda.is_available():
 		raise Exception('CUDA Device not found')
 
-	style_image = Image.open(args.style).convert('RGB').resize((224, 224))
-	content_image = Image.open(args.content).convert('RGB').resize((224, 224))
-
-	style_tensor = Variable(ToTensor()(style_image))
-	# Push an empty batch dimension so we are now batch/channels/width/height dimensions
-	style_tensor = style_tensor.view(1, -1, style_image.size[1], style_image.size[0])
-	style_tensor.unsqueeze(0)
-
-	content_tensor = Variable(ToTensor()(content_image))
-	content_tensor = content_tensor.view(1, -1, content_image.size[1], content_image.size[0])
-	content_tensor.unsqueeze(0)
-
 	device = torch.device('cuda' if args.cuda else 'cpu')
+
+	style_tensor = loader.image_to_tensor(device, args.style, 224)
+	content_tensor = loader.image_to_tensor(device, args.content, 224)
+
 	model = ConvNet()
 
 	# White noise
-	input_image = torch.randn(content_tensor.data().size, device=device)
+	input_image = torch.randn(content_tensor.data.size(), device=device)
 
 	if args.model:
 		model.load_state_dict(torch.load(args.model))
