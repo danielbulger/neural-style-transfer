@@ -50,10 +50,11 @@ class ConvNet(nn.Module):
 			x = module(x)
 
 			if name in self._content_layers:
-				content_layers[name] = x.clone().detach()
+				content_layers[name] = x
 
 			if name in self._style_layers:
-				style_layers[name] = x.clone().detach()
+				style_layers[name] = x
+
 		return {
 			'output': x,
 			'content_features': content_layers,

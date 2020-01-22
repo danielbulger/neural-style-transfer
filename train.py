@@ -45,7 +45,7 @@ def main():
 	model = ConvNet()
 
 	# White noise
-	input_image = torch.randn(content_tensor.data.size(), device=device)
+	input_image = torch.randn(content_tensor.data.size()).requires_grad_(True).to(device)
 
 	if args.model:
 		model.load_state_dict(torch.load(args.model))
@@ -77,11 +77,18 @@ def main():
 				style['content_features'][name]
 			)
 
+		for name in style['style_features'].keys():
+			style_loss += F.mse_loss(
+				gram_matrix(style['style_features'][name]),
+				gram_matrix(content['style_features'][name])
+			)
+
 		style_loss *= args.style_weight
 		content_loss *= args.content_weight
 
 		loss = style_loss + content_loss
-		loss.backward()
+
+		loss.backward(retain_graph=True)
 		optimiser.step()
 
 		losses['style'] += style_loss
