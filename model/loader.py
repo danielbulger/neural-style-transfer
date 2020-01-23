@@ -4,7 +4,7 @@ from PIL import Image
 
 
 def pil_image_to_tensor(device, image, image_size):
-	image.convert('RGB')
+	image = image.convert('RGB')
 	loader = transforms.Compose([
 		transforms.Resize(image_size),
 		transforms.ToTensor(),
