@@ -10,6 +10,18 @@ class ConvNet(nn.Module):
 		[[512, 512], [512, 512], [512, 512]]
 	]
 
+	_content_layers = [
+		'block4_relu3'
+	]
+
+	_style_layers = [
+		'block1_relu2',
+		'block2_relu2',
+		'block3_relu3',
+		'block4_relu3',
+		'block5_relu3'
+	]
+
 	def __init__(self):
 		super(ConvNet, self).__init__()
 
@@ -30,7 +42,21 @@ class ConvNet(nn.Module):
 			self.sequential.add_module(block, nn.MaxPool2d(kernel_size=1, stride=1))
 
 	def forward(self, x):
-		return self.sequential(x)
 
-	def get_module(self, name: str):
-		return self.sequential.__getattr__(name)
+		content_layers = {}
+		style_layers = {}
+
+		for name, module in self.sequential.named_children():
+			x = module(x)
+
+			if name in self._content_layers:
+				content_layers[name] = x
+
+			if name in self._style_layers:
+				style_layers[name] = x
+
+		return {
+			'output': x,
+			'content_features': content_layers,
+			'style_features': style_layers
+		}
