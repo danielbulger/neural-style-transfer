@@ -4,7 +4,7 @@ from argparse import ArgumentParser
 from PIL import Image
 
 from model.ConvNet import ConvNet
-from loader import transform
+from model import transform
 
 
 def parse_args():

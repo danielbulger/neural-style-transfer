@@ -4,7 +4,7 @@ import torchvision.models as models
 
 class ConvNet(nn.Module):
 
-	def __init__(self):
+	def __init__(self, required_grad=True):
 		super(ConvNet, self).__init__()
 		model = models.vgg16(pretrained=True).features
 
@@ -18,20 +18,25 @@ class ConvNet(nn.Module):
 		for x in range(4):
 			self.block1.add_module(str(x), model[x])
 
+		self.block2.add_module(str(4), nn.AvgPool2d(kernel_size=2, stride=2))
+
 		# Get from layer1-pool1 to layer2-relu2
-		for x in range(4, 9):
+		for x in range(5, 9):
 			self.block2.add_module(str(x), model[x])
 
+		self.block3.add_module(str(9), nn.AvgPool2d(kernel_size=2, stride=2))
 		# Get from layer2-pool1 to layer3-relu3
-		for x in range(7, 16):
+		for x in range(10, 16):
 			self.block3.add_module(str(x), model[x])
 
+		self.block4.add_module(str(16), nn.AvgPool2d(kernel_size=2, stride=2))
 		# Get from layer4-pool1 to layer4-relu3
-		for x in range(16, 23):
+		for x in range(17, 23):
 			self.block4.add_module(str(x), model[x])
 
+		self.block5.add_module(str(23), nn.AvgPool2d(kernel_size=2, stride=2))
 		# Get from layer5-pool1 to layer5-relu3
-		for x in range(23, 30):
+		for x in range(24, 30):
 			self.block5.add_module(str(x), model[x])
 
 	def forward(self, x):

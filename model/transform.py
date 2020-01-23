@@ -2,14 +2,12 @@ import torchvision.transforms as transforms
 from PIL import Image
 
 
-def pil_image_to_tensor(image, image_size, add_batch=True):
+def pil_image_to_tensor(image, image_size):
 	image = image.convert('RGB')
 	loader = get_transforms(image_size)
 
 	image = loader(image)
-
-	if add_batch:
-		image = image.unsqueeze(0)
+	image = image.unsqueeze(0)
 
 	return image
 
@@ -25,8 +23,8 @@ def get_transforms(image_size):
 	])
 
 
-def image_to_tensor(name, image_size, add_batch=True):
-	return pil_image_to_tensor(Image.open(name), image_size, add_batch)
+def image_to_tensor(name, image_size):
+	return pil_image_to_tensor(Image.open(name), image_size)
 
 
 def tensor_to_image(tensor):
