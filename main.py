@@ -4,7 +4,7 @@ from argparse import ArgumentParser
 from PIL import Image
 
 from model.ConvNet import ConvNet
-from model import loader
+from loader import transform
 
 
 def parse_args():
@@ -27,7 +27,7 @@ def main():
 	image = Image.open(args.content)
 	image_size = image.size
 
-	input_tensor = loader.pil_image_to_tensor(device, image, (224, 224))
+	input_tensor = transform.pil_image_to_tensor(image, (224, 224)).to(device)
 
 	model = ConvNet()
 	model.load_state_dict(torch.load(args.model))
@@ -35,7 +35,7 @@ def main():
 
 	output_tensor = model(input_tensor)
 
-	image = loader.tensor_to_image(output_tensor['output'])
+	image = transform.tensor_to_image(output_tensor['output'])
 	image = image.resize(image_size)
 	image.save(args.output)
 

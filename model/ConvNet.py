@@ -1,62 +1,61 @@
 from torch import nn
+import torchvision.models as models
 
 
 class ConvNet(nn.Module):
-	_layers = [
-		[[3, 64], [64, 64]],
-		[[64, 128], [128, 128]],
-		[[128, 256], [256, 256], [256, 256]],
-		[[256, 512], [512, 512], [512, 512]],
-		[[512, 512], [512, 512], [512, 512]]
-	]
-
-	_content_layers = [
-		'block4_relu3'
-	]
-
-	_style_layers = [
-		'block1_relu2',
-		'block2_relu2',
-		'block3_relu3',
-		'block4_relu3',
-		'block5_relu3'
-	]
 
 	def __init__(self):
 		super(ConvNet, self).__init__()
+		model = models.vgg16(pretrained=True).features
 
-		self.sequential = nn.Sequential()
+		self.block1 = nn.Sequential()
+		self.block2 = nn.Sequential()
+		self.block3 = nn.Sequential()
+		self.block4 = nn.Sequential()
+		self.block5 = nn.Sequential()
 
-		for index, layer in enumerate(self._layers):
-			block = 'block{}'.format(index + 1)
-			for num, module in enumerate(layer):
-				self.sequential.add_module(
-					'{}_conv{}'.format(block, num + 1),
-					nn.Conv2d(module[0], module[1], kernel_size=3)
-				)
+		# Get from layer1-conv1 to layer1-relu2
+		for x in range(4):
+			self.block1.add_module(str(x), model[x])
 
-				self.sequential.add_module(
-					'{}_relu{}'.format(block, num + 1),
-					nn.ReLU(inplace=False)
-				)
-			self.sequential.add_module(block, nn.MaxPool2d(kernel_size=1, stride=1))
+		# Get from layer1-pool1 to layer2-relu2
+		for x in range(4, 9):
+			self.block2.add_module(str(x), model[x])
+
+		# Get from layer2-pool1 to layer3-relu3
+		for x in range(7, 16):
+			self.block3.add_module(str(x), model[x])
+
+		# Get from layer4-pool1 to layer4-relu3
+		for x in range(16, 23):
+			self.block4.add_module(str(x), model[x])
+
+		# Get from layer5-pool1 to layer5-relu3
+		for x in range(23, 30):
+			self.block5.add_module(str(x), model[x])
 
 	def forward(self, x):
+		content_layers = []
+		style_layers = []
 
-		content_layers = {}
-		style_layers = {}
+		value = self.block1(x)
+		style_layers.append(value)
 
-		for name, module in self.sequential.named_children():
-			x = module(x)
+		value = self.block2(value)
+		style_layers.append(value)
 
-			if name in self._content_layers:
-				content_layers[name] = x
+		value = self.block3(value)
+		style_layers.append(value)
 
-			if name in self._style_layers:
-				style_layers[name] = x
+		value = self.block4(value)
+		style_layers.append(value)
+		content_layers.append(value)
+
+		value = self.block5(value)
+		style_layers.append(value)
 
 		return {
 			'output': x,
-			'content_features': content_layers,
-			'style_features': style_layers
+			'content': content_layers,
+			'style': style_layers
 		}

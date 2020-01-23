@@ -3,7 +3,8 @@ import torch
 import torch.nn.functional as F
 from torch import optim
 
-from model import loader
+from loader import transform
+from loader.ImageDataset import ImageDataset
 from model.ConvNet import ConvNet
 from argparse import ArgumentParser
 
@@ -11,6 +12,8 @@ from argparse import ArgumentParser
 def get_args():
 	parser = ArgumentParser()
 	parser.add_argument('--cuda', default=False, type=lambda x: str(x).lower() == 'true')
+	parser.add_argument('--images', type=str, required=True, help='The folder that contains the training images')
+	parser.add_argument('--workers', type=int, help='The number of threads to use when loading the training set')
 	parser.add_argument('--model', type=str, help='The PyTorch model to use')
 	parser.add_argument('--style', type=str, required=True, help='The style image to learn')
 	parser.add_argument('--iterations', type=int, default=50, help='The number of training iterations')
@@ -36,10 +39,14 @@ def main():
 	if args.cuda and not torch.cuda.is_available():
 		raise Exception('CUDA Device not found')
 
+	workers = args.workers
+	if workers is None:
+		from multiprocessing import cpu_count
+		workers = cpu_count()
+
 	device = torch.device('cuda' if args.cuda else 'cpu')
 
-	style_tensor = loader.image_to_tensor(device, args.style, (224, 224))
-	style_size = style_tensor.data.size()
+	style_tensor = transform.image_to_tensor(args.style, (224, 224)).to(device)
 
 	model = ConvNet()
 
@@ -50,56 +57,69 @@ def main():
 
 	optimiser = optim.Adam(model.parameters(), lr=args.lr)
 	losses = {
-		'total': 0,
 		'content': 0,
-		'style': 0
+		'style': 0,
+		'total': 0
 	}
 
+	train_dataset = ImageDataset(args.images)
+
+	train_loader = torch.utils.data.DataLoader(
+		train_dataset,
+		batch_size=1,
+		num_workers=workers,
+		shuffle=False
+	)
+
 	for epoch in range(1, args.iterations + 1):
+		for index, data in enumerate(train_loader):
 
-		# White noise
-		input_image = torch.randn(style_size).to(device)
-		input_image.data.clamp_(0, 1)
+			data = data.to(device)
 
-		optimiser.zero_grad()
+			optimiser.zero_grad()
 
-		style = model(style_tensor)
-		content = model(input_image)
+			style = model(style_tensor)
+			content = model(data)
 
-		style_loss = 0
-		content_loss = 0
+			style_loss = 0
+			content_loss = 0
 
-		for name in style['content_features'].keys():
-			content_loss += F.mse_loss(
-				content['content_features'][name],
-				style['content_features'][name]
-			)
+			for x in range(len(style['content'])):
+				content_loss += F.mse_loss(
+					content['content'][x],
+					style['content'][x],
+				)
 
-		for name in style['style_features'].keys():
-			style_loss += F.mse_loss(
-				gram_matrix(style['style_features'][name]),
-				gram_matrix(content['style_features'][name])
-			)
+			for x in range(len(style['style'])):
+				style_loss += F.mse_loss(
+					gram_matrix(style['style'][x]),
+					gram_matrix(content['style'][x])
+				)
 
-		style_loss *= args.style_weight
-		content_loss *= args.content_weight
+			style_loss *= args.style_weight
+			content_loss *= args.content_weight
 
-		loss = style_loss + content_loss
+			loss = style_loss + content_loss
 
-		loss.backward(retain_graph=True)
-		optimiser.step()
+			loss.backward()
+			optimiser.step()
 
-		losses['style'] += style_loss
-		losses['content'] += content_loss
-		losses['total'] += loss
+			losses['style'] += style_loss
+			losses['content'] += content_loss
+			losses['total'] += loss
 
-		if epoch % args.checkpoints == 0:
-			print(
-				f"Epoch: {epoch}\tContent: {losses['content']:.6f}\tStyle: {losses['style']}\tTotal: {losses['total']}")
-			# Save the current model to the checkpoint directory.
-			torch.save(model.state_dict(), os.path.join(args.log_dir, f'checkpoint{epoch}.pt'))
-			# Reset the losses tally.
-			losses['style'] = losses['content'] = losses['total'] = 0
+			if ((index + 1) * epoch) % args.checkpoints == 0:
+				print(f"Epoch {epoch}: Iteration {index}")
+
+				for key, value in losses.items():
+					print(f"\t{key}: {value}")
+					# Reset the losses for the next epoch
+					losses[key] = 0
+				# Save the current model to the checkpoint directory.
+				torch.save(model.state_dict(), os.path.join(args.log_dir, f'checkpoint{epoch}.pt'))
+
+	# Save the finished model
+	torch.save(model.state_dict(), os.path.join(args.log_dir, 'model-final.pt'))
 
 
 if __name__ == '__main__':
