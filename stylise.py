@@ -126,7 +126,7 @@ def main():
 				content_dimensions
 			)
 
-	optimiser.step(closure)
+		optimiser.step()
 
 	input_noise.data.clamp_(0, 1)
 	save_image(
