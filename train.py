@@ -13,7 +13,6 @@ def get_args():
 	parser.add_argument('--cuda', default=False, type=lambda x: str(x).lower() == 'true')
 	parser.add_argument('--model', type=str, help='The PyTorch model to use')
 	parser.add_argument('--style', type=str, required=True, help='The style image to learn')
-	parser.add_argument('--content', type=str, required=True, help='The content image to transfer to')
 	parser.add_argument('--iterations', type=int, default=50, help='The number of training iterations')
 	parser.add_argument('--lr', type=float, default=0.001, help='The learning rate')
 	parser.add_argument('--checkpoints', type=int, default=5, help='The number of iterations before checkpoints')
@@ -40,12 +39,9 @@ def main():
 	device = torch.device('cuda' if args.cuda else 'cpu')
 
 	style_tensor = loader.image_to_tensor(device, args.style, (224, 224))
-	content_tensor = loader.image_to_tensor(device, args.content, (224, 224))
+	style_size = style_tensor.data.size()
 
 	model = ConvNet()
-
-	# White noise
-	input_image = torch.randn(content_tensor.data.size()).requires_grad_(True).to(device)
 
 	if args.model:
 		model.load_state_dict(torch.load(args.model))
@@ -61,6 +57,8 @@ def main():
 
 	for epoch in range(1, args.iterations + 1):
 
+		# White noise
+		input_image = torch.randn(style_size).to(device)
 		input_image.data.clamp_(0, 1)
 
 		optimiser.zero_grad()
