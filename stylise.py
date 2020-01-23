@@ -20,6 +20,7 @@ def get_args():
 	parser.add_argument('--checkpoints', type=int, default=5, help='The number of iterations before checkpoints')
 	parser.add_argument('--style-weight', type=float, default=1, help='The amount to scale the style loss')
 	parser.add_argument('--content-weight', type=float, default=1, help='The amount to scale the content loss')
+	parser.add_argument('--variation-weight', type=float, default=1, help='The amount to scale the variation loss')
 	parser.add_argument('--log-dir', type=str, required=True, help='The directory to save the model checkpoints')
 	return parser.parse_args()
 
@@ -70,12 +71,9 @@ def main():
 	losses = {
 		'content': 0,
 		'style': 0,
+		'variation': 0,
 		'total': 0
 	}
-
-	def closure():
-
-		return loss
 
 	for iteration in range(1, args.iterations + 1):
 		input_noise.data.clamp_(0, 1)
@@ -98,17 +96,23 @@ def main():
 				style_features[x]
 			)
 
+		variation_loss = torch.mean(torch.abs(input_noise[:, :, :, : -1] - input_noise[:, :, :, 1:])) + \
+			torch.mean(torch.abs(input_noise[:, :, :-1, :] - input_noise[:, :, 1:, :]))
+
 		style_loss *= args.style_weight
 		content_loss *= args.content_weight
+		variation_loss *= args.variation_weight
 
 		style_loss.to(device)
 		content_loss.to(device)
+		variation_loss.to(device)
 
-		loss = style_loss + content_loss
+		loss = style_loss + content_loss + variation_loss
 		loss.backward()
 
 		losses['style'] += style_loss
 		losses['content'] += content_loss
+		losses['variation'] += variation_loss
 		losses['total'] += loss
 
 		if iteration % args.checkpoints == 0:
