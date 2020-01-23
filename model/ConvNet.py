@@ -3,61 +3,86 @@ import torchvision.models as models
 
 
 class ConvNet(nn.Module):
+	_content_layers = [
+		'block4_relu2',
+		'block5_relu5',
+	]
 
-	def __init__(self, required_grad=True):
+	_style_layers = [
+		'block1_relu1',
+		'block2_relu1',
+		'block3_relu1',
+		'block4_relu1',
+		'block5_relu1'
+	]
+
+	_layers = [
+		'block1_conv1',
+		'block1_relu1',
+		'block1_conv2',
+		'block1_relu2',
+		'block1_pool',
+
+		'block2_conv1',
+		'block2_relu1',
+		'block2_conv2',
+		'block2_relu2',
+		'block2_pool',
+
+		'block3_conv1',
+		'block3_relu1',
+		'block3_conv2',
+		'block3_relu2',
+		'block3_conv3',
+		'block3_relu3',
+		'block3_pool',
+
+		'block4_conv1',
+		'block4_relu1',
+		'block4_conv2',
+		'block4_relu2',
+		'block4_conv3',
+		'block4_relu3',
+		'block4_pool',
+
+		'block5_conv1',
+		'block5_relu1',
+		'block5_conv2',
+		'block5_relu2',
+		'block5_conv3',
+		'block5_relu3',
+		'block5_pool'
+	]
+
+	def __init__(self):
 		super(ConvNet, self).__init__()
 		model = models.vgg16(pretrained=True).features
 
-		self.block1 = nn.Sequential()
-		self.block2 = nn.Sequential()
-		self.block3 = nn.Sequential()
-		self.block4 = nn.Sequential()
-		self.block5 = nn.Sequential()
+		self.module_list = nn.ModuleList()
 
-		# Get from layer1-conv1 to layer1-relu2
-		for x in range(4):
-			self.block1.add_module(str(x), model[x])
+		assert (len(self._layers) == len(model))
 
-		self.block2.add_module(str(4), nn.AvgPool2d(kernel_size=2, stride=2))
-
-		# Get from layer1-pool1 to layer2-relu2
-		for x in range(5, 9):
-			self.block2.add_module(str(x), model[x])
-
-		self.block3.add_module(str(9), nn.AvgPool2d(kernel_size=2, stride=2))
-		# Get from layer2-pool1 to layer3-relu3
-		for x in range(10, 16):
-			self.block3.add_module(str(x), model[x])
-
-		self.block4.add_module(str(16), nn.AvgPool2d(kernel_size=2, stride=2))
-		# Get from layer4-pool1 to layer4-relu3
-		for x in range(17, 23):
-			self.block4.add_module(str(x), model[x])
-
-		self.block5.add_module(str(23), nn.AvgPool2d(kernel_size=2, stride=2))
-		# Get from layer5-pool1 to layer5-relu3
-		for x in range(24, 30):
-			self.block5.add_module(str(x), model[x])
+		for name, module in zip(self._layers, model):
+			if 'pool' not in name:
+				self.module_list.add_module(name, module)
+			else:
+				self.module_list.add_module(name, nn.AvgPool2d(kernel_size=2, stride=2))
 
 	def forward(self, x):
 		content_layers = []
 		style_layers = []
 
-		value = self.block1(x)
-		style_layers.append(value)
+		value = x
 
-		value = self.block2(value)
-		style_layers.append(value)
+		for name, module in self.module_list.named_children():
 
-		value = self.block3(value)
-		style_layers.append(value)
+			value = module(value)
 
-		value = self.block4(value)
-		style_layers.append(value)
-		content_layers.append(value)
+			if name in self._content_layers:
+				content_layers.append(value)
 
-		value = self.block5(value)
-		style_layers.append(value)
+			if name in self._style_layers:
+				style_layers.append(value)
 
 		return {
 			'output': x,
