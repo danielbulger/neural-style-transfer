@@ -4,8 +4,7 @@ import torchvision.models as models
 
 class ConvNet(nn.Module):
 	_content_layers = [
-		'block4_relu2',
-		'block5_relu5',
+		'block5_relu2'
 	]
 
 	_style_layers = [
@@ -35,6 +34,8 @@ class ConvNet(nn.Module):
 		'block3_relu2',
 		'block3_conv3',
 		'block3_relu3',
+		'block3_conv4',
+		'block3_relu4',
 		'block3_pool',
 
 		'block4_conv1',
@@ -43,6 +44,8 @@ class ConvNet(nn.Module):
 		'block4_relu2',
 		'block4_conv3',
 		'block4_relu3',
+		'block4_conv4',
+		'block4_relu4',
 		'block4_pool',
 
 		'block5_conv1',
@@ -51,12 +54,14 @@ class ConvNet(nn.Module):
 		'block5_relu2',
 		'block5_conv3',
 		'block5_relu3',
+		'block5_conv4',
+		'block5_relu4',
 		'block5_pool'
 	]
 
 	def __init__(self):
 		super(ConvNet, self).__init__()
-		model = models.vgg16(pretrained=True).features
+		model = models.vgg19(pretrained=True).features
 
 		self.module_list = nn.ModuleList()
 
@@ -66,7 +71,7 @@ class ConvNet(nn.Module):
 			if 'pool' not in name:
 				self.module_list.add_module(name, module)
 			else:
-				self.module_list.add_module(name, nn.AvgPool2d(kernel_size=2, stride=2))
+				self.module_list.add_module(name, nn.AvgPool2d(kernel_size=2, stride=2, padding=0))
 
 	def forward(self, x):
 		content_layers = []
@@ -75,7 +80,6 @@ class ConvNet(nn.Module):
 		value = x
 
 		for name, module in self.module_list.named_children():
-
 			value = module(value)
 
 			if name in self._content_layers:

@@ -3,6 +3,7 @@ import torch
 import torch.nn.functional as F
 from PIL import Image
 from torch import optim
+from torch.autograd import Variable
 
 from model import transform
 from model.ConvNet import ConvNet
@@ -16,7 +17,6 @@ def get_args():
 	parser.add_argument('--style', type=str, required=True, help='The style image to learn')
 	parser.add_argument('--content', type=str, required=True, help='The content image to stylise')
 	parser.add_argument('--iterations', type=int, default=50, help='The number of training iterations')
-	parser.add_argument('--lr', type=float, default=0.001, help='The learning rate')
 	parser.add_argument('--checkpoints', type=int, default=5, help='The number of iterations before checkpoints')
 	parser.add_argument('--style-weight', type=float, default=1, help='The amount to scale the style loss')
 	parser.add_argument('--content-weight', type=float, default=1, help='The amount to scale the content loss')
@@ -27,9 +27,10 @@ def get_args():
 
 def gram_matrix(tensor):
 	(batch, channel, width, height) = tensor.size()
-	features = tensor.view(batch * channel, width * height)
-	gram = torch.mm(features, features.t())
-	return gram.div(batch * channel * width * height)
+	features = tensor.view(batch, channel, width * height)
+	transpose = features.transpose(1, 2)
+	gram = features.bmm(transpose)
+	return gram.div(channel * width * height)
 
 
 def save_image(directory, filename, tensor, size):
@@ -64,9 +65,9 @@ def main():
 	content_output = model(content_tensor)
 	content_features = [x.detach() for x in content_output['content']]
 
-	input_noise = torch.randn(1, 3, 224, 224, device=device, requires_grad=True)
+	input_img = Variable(content_tensor.clone(), requires_grad=True)
 
-	optimiser = optim.Adam(params=[input_noise], lr=args.lr)
+	optimiser = optim.LBFGS(params=[input_img])
 
 	losses = {
 		'content': 0,
@@ -76,44 +77,40 @@ def main():
 	}
 
 	for iteration in range(1, args.iterations + 1):
-		input_noise.data.clamp_(0, 1)
-		optimiser.zero_grad()
 
-		output = model(input_noise)
+		def closure():
+			output = model(input_img)
 
-		style_loss = 0
-		content_loss = 0
+			style_loss = 0
+			content_loss = 0
 
-		for x in range(len(output['content'])):
-			content_loss += F.mse_loss(
-				output['content'][x],
-				content_features[x],
-			)
+			for x in range(len(output['content'])):
+				content_loss += F.mse_loss(
+					output['content'][x],
+					content_features[x],
+				) * args.style_weight
 
-		for x in range(len(output['style'])):
-			style_loss += F.mse_loss(
-				gram_matrix(output['style'][x]),
-				style_features[x]
-			)
+			for x in range(len(output['style'])):
+				style_loss += F.mse_loss(
+					gram_matrix(output['style'][x]),
+					style_features[x]
+				) * args.content_weight
 
-		variation_loss = torch.mean(torch.abs(input_noise[:, :, :, : -1] - input_noise[:, :, :, 1:])) + \
-			torch.mean(torch.abs(input_noise[:, :, :-1, :] - input_noise[:, :, 1:, :]))
+			x_var = torch.abs(input_img[:, :, 1:, :] - input_img[:, :, :-1, :])
+			y_var = torch.abs(input_img[:, 1:, :, :] - input_img[:, :-1, :, :])
+			variation_loss = (torch.mean(x_var) + torch.mean(y_var)) * args.variation_weight
 
-		style_loss *= args.style_weight
-		content_loss *= args.content_weight
-		variation_loss *= args.variation_weight
+			loss = style_loss + content_loss + variation_loss
 
-		style_loss.to(device)
-		content_loss.to(device)
-		variation_loss.to(device)
+			optimiser.zero_grad()
+			loss.backward()
 
-		loss = style_loss + content_loss + variation_loss
-		loss.backward()
+			losses['style'] += style_loss
+			losses['content'] += content_loss
+			losses['variation'] += variation_loss
+			losses['total'] += loss
 
-		losses['style'] += style_loss
-		losses['content'] += content_loss
-		losses['variation'] += variation_loss
-		losses['total'] += loss
+			return loss
 
 		if iteration % args.checkpoints == 0:
 			print(f"Iteration {iteration}")
@@ -125,18 +122,17 @@ def main():
 
 			save_image(
 				args.log_dir,
-				f'checkpoint-{iteration}.png',
-				input_noise,
+				f"checkpoint-{iteration}.png",
+				input_img,
 				content_dimensions
 			)
 
-		optimiser.step()
+		optimiser.step(closure)
 
-	input_noise.data.clamp_(0, 1)
 	save_image(
 		args.log_dir,
 		'final.png',
-		input_noise,
+		input_img,
 		content_dimensions
 	)
 
