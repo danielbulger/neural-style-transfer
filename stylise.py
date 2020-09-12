@@ -13,7 +13,6 @@ from argparse import ArgumentParser
 def get_args():
 	parser = ArgumentParser()
 	parser.add_argument('--cuda', default=False, type=lambda x: str(x).lower() == 'true')
-	parser.add_argument('--model', type=str, help='The PyTorch model to use')
 	parser.add_argument('--style', type=str, required=True, help='The style image to learn')
 	parser.add_argument('--content', type=str, required=True, help='The content image to stylise')
 	parser.add_argument('--iterations', type=int, default=50, help='The number of training iterations')
@@ -88,13 +87,13 @@ def main():
 				content_loss += F.mse_loss(
 					output['content'][x],
 					content_features[x],
-				) * args.style_weight
+				) * args.content_weight
 
 			for x in range(len(output['style'])):
 				style_loss += F.mse_loss(
 					gram_matrix(output['style'][x]),
 					style_features[x]
-				) * args.content_weight
+				) * args.style_weight
 
 			x_var = torch.abs(input_img[:, :, 1:, :] - input_img[:, :, :-1, :])
 			y_var = torch.abs(input_img[:, 1:, :, :] - input_img[:, :-1, :, :])
