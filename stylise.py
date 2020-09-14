@@ -7,12 +7,12 @@ from torch.autograd import Variable
 
 from model import transform
 from model.ConvNet import ConvNet
+from model.Normalization import Normalization
 from argparse import ArgumentParser
 
 
 def get_args():
 	parser = ArgumentParser()
-	parser.add_argument('--cuda', default=False, type=lambda x: str(x).lower() == 'true')
 	parser.add_argument('--style', type=str, required=True, help='The style image to learn')
 	parser.add_argument('--content', type=str, required=True, help='The content image to stylise')
 	parser.add_argument('--iterations', type=int, default=50, help='The number of training iterations')
@@ -41,17 +41,18 @@ def save_image(directory, filename, tensor, size):
 def main():
 	args = get_args()
 
-	if args.cuda and not torch.cuda.is_available():
-		raise Exception('CUDA Device not found')
-
-	device = torch.device('cuda' if args.cuda else 'cpu')
+	device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 	style_tensor = transform.image_to_tensor(args.style, (224, 224)).to(device)
 	content_image = Image.open(args.content)
 	content_dimensions = content_image.size
 	content_tensor = transform.pil_image_to_tensor(content_image, (224, 224)).to(device)
 
-	model = ConvNet()
+	model = ConvNet(Normalization(
+		device,
+		[0.485, 0.456, 0.406],
+		[0.229, 0.224, 0.225]
+	))
 
 	for param in model.parameters():
 		param.requires_grad = False
@@ -66,7 +67,7 @@ def main():
 
 	input_img = Variable(content_tensor.clone(), requires_grad=True)
 
-	optimiser = optim.LBFGS(params=[input_img])
+	optimiser = optim.LBFGS(params=[input_img.requires_grad_()])
 
 	losses = {
 		'content': 0,
@@ -78,6 +79,10 @@ def main():
 	for iteration in range(1, args.iterations + 1):
 
 		def closure():
+			optimiser.zero_grad()
+
+			input_img.data.clamp_(0, 1)
+
 			output = model(input_img)
 
 			style_loss = 0
@@ -87,13 +92,17 @@ def main():
 				content_loss += F.mse_loss(
 					output['content'][x],
 					content_features[x],
-				) * args.content_weight
+				)
+
+			content_loss *= args.content_weight
 
 			for x in range(len(output['style'])):
 				style_loss += F.mse_loss(
 					gram_matrix(output['style'][x]),
 					style_features[x]
-				) * args.style_weight
+				)
+
+			style_loss *= args.style_weight
 
 			x_var = torch.abs(input_img[:, :, 1:, :] - input_img[:, :, :-1, :])
 			y_var = torch.abs(input_img[:, 1:, :, :] - input_img[:, :-1, :, :])
@@ -101,7 +110,6 @@ def main():
 
 			loss = style_loss + content_loss + variation_loss
 
-			optimiser.zero_grad()
 			loss.backward()
 
 			losses['style'] += style_loss

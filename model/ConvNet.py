@@ -4,7 +4,7 @@ import torchvision.models as models
 
 class ConvNet(nn.Module):
 	_content_layers = [
-		'block5_relu2'
+		'block4_relu2'
 	]
 
 	_style_layers = [
@@ -59,9 +59,11 @@ class ConvNet(nn.Module):
 		'block5_pool'
 	]
 
-	def __init__(self):
+	def __init__(self, normalization):
 		super(ConvNet, self).__init__()
 		model = models.vgg19(pretrained=True).features
+
+		self.normalization = normalization
 
 		self.module_list = nn.ModuleList()
 
@@ -77,7 +79,7 @@ class ConvNet(nn.Module):
 		content_layers = []
 		style_layers = []
 
-		value = x
+		value = self.normalization(x)
 
 		for name, module in self.module_list.named_children():
 			value = module(value)
